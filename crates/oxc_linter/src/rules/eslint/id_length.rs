@@ -173,6 +173,36 @@ impl Rule for IdLength {
             AstKind::BindingIdentifier(ident) => {
                 self.handle_binding_identifier(ident, node, ctx);
             }
+            AstKind::IdentifierReference(ident) => {
+                let is_target = match ctx.nodes().parent_kind(node.id()) {
+                    AstKind::ArrayAssignmentTarget(_) => true,
+                    AstKind::AssignmentTargetRest(rest) => rest.target.span() == ident.span,
+                    AstKind::AssignmentTargetWithDefault(default) => {
+                        default.binding.span() == ident.span
+                    }
+                    AstKind::AssignmentTargetPropertyProperty(property) => {
+                        property.binding.span() == ident.span
+                    }
+                    AstKind::AssignmentTargetPropertyIdentifier(property) => {
+                        self.properties == AlwaysNever::Always
+                            && property.binding.span == ident.span
+                    }
+                    _ => false,
+                };
+                if is_target && !self.is_exception(&ident.name) {
+                    let length = if ident.name.is_ascii() {
+                        ident.name.len()
+                    } else {
+                        ident.name.graphemes(true).count()
+                    };
+                    if self.is_too_long(length) {
+                        ctx.diagnostic(id_length_is_too_long_diagnostic(ident.span, self.max));
+                    }
+                    if self.is_too_short(length) {
+                        ctx.diagnostic(id_length_is_too_short_diagnostic(ident.span, self.min));
+                    }
+                }
+            }
             AstKind::IdentifierName(ident) => {
                 self.handle_identifier_name(ident, node, ctx);
             }
@@ -453,6 +483,11 @@ fn test() {
     use crate::tester::Tester;
 
     let pass = vec![
+        ("[name] = [x];", None),
+        ("[name = x] = values;", None),
+        ("for ([name] of values) { console.log(x); }", None),
+        ("[q] = values;", Some(serde_json::json!([{ "exceptions": ["q"] }]))),
+        ("({ x } = values);", Some(serde_json::json!([{ "properties": "never" }]))),
         ("var xyz;", None),
         ("var xy = 1;", None),
         ("function xyz() {};", None),
@@ -620,6 +655,14 @@ fn test() {
     ];
 
     let fail = vec![
+        ("let ix, s; for ([ix, s] of [[1, 'a']]) { console.log(ix, s); }", None),
+        ("let q; [q] = [2]; console.log(q);", None),
+        ("[q = fallback] = values;", None),
+        ("[...q] = values;", None),
+        ("({ value: q } = values);", None),
+        ("({ q } = values);", None),
+        ("for ({ value: q } of values) {}", None),
+        ("[longName] = values;", Some(serde_json::json!([{ "max": 5 }]))),
         ("var x = 1;", None),
         ("var x;", None),
         ("obj.e = document.body;", None),

@@ -1,9 +1,17 @@
-use oxc_ast::AstKind;
+use oxc_ast::{
+    AstKind,
+    ast::{ArrowFunctionBody, Expression, PropertyKey, PropertyKind},
+};
 use oxc_diagnostics::OxcDiagnostic;
 use oxc_macros::declare_oxc_lint;
-use oxc_span::Span;
+use oxc_span::{GetSpan, Span};
 
-use crate::{AstNode, context::LintContext, rule::Rule};
+use crate::{
+    AstNode,
+    ast_util::{is_method_call, outermost_paren_parent},
+    context::LintContext,
+    rule::Rule,
+};
 
 fn no_setter_return_diagnostic(span: Span) -> OxcDiagnostic {
     OxcDiagnostic::warn("Setter cannot return a value")
@@ -18,9 +26,11 @@ declare_oxc_lint!(
     /// ### What it does
     ///
     /// Setters cannot return values.
+    /// This includes setter functions in descriptors passed to `Object.defineProperty`,
+    /// `Reflect.defineProperty`, `Object.defineProperties`, and `Object.create`.
     ///
-    /// This rule can be disabled for TypeScript code, as the TypeScript compiler
-    /// enforces this check.
+    /// TypeScript also checks language-level setters, but does not reject returned
+    /// values in property descriptor setter functions.
     ///
     /// ### Why is this bad?
     ///
@@ -48,22 +58,86 @@ declare_oxc_lint!(
 
 impl Rule for NoSetterReturn {
     fn run<'a>(&self, node: &AstNode<'a>, ctx: &LintContext<'a>) {
-        let AstKind::ReturnStatement(stmt) = node.kind() else {
-            return;
-        };
-        if stmt.argument.is_none() {
-            return;
-        }
-
-        for scope_id in ctx.scoping().scope_ancestors(node.scope_id()) {
-            let flags = ctx.scoping().scope_flags(scope_id);
-            if flags.is_set_accessor() {
-                ctx.diagnostic(no_setter_return_diagnostic(stmt.span));
-            } else if flags.is_function() {
-                break;
+        match node.kind() {
+            AstKind::ArrowFunctionExpression(arrow)
+                if !matches!(&arrow.body, ArrowFunctionBody::FunctionBody(_))
+                    && is_descriptor_setter(node, ctx) =>
+            {
+                ctx.diagnostic(no_setter_return_diagnostic(arrow.body.span()));
             }
+            AstKind::ReturnStatement(stmt) if stmt.argument.is_some() => {
+                for scope_id in ctx.scoping().scope_ancestors(node.scope_id()) {
+                    let flags = ctx.scoping().scope_flags(scope_id);
+                    if flags.is_set_accessor() {
+                        ctx.diagnostic(no_setter_return_diagnostic(stmt.span));
+                        return;
+                    }
+                    if flags.is_function() {
+                        let function = ctx.nodes().get_node(ctx.scoping().get_node_id(scope_id));
+                        if is_descriptor_setter(function, ctx) {
+                            ctx.diagnostic(no_setter_return_diagnostic(stmt.span));
+                        }
+                        return;
+                    }
+                }
+            }
+            _ => {}
         }
     }
+}
+
+fn is_descriptor_setter<'a>(function: &AstNode<'a>, ctx: &LintContext<'a>) -> bool {
+    let Some(property_node) = outermost_paren_parent(function, ctx) else {
+        return false;
+    };
+    let AstKind::ObjectProperty(property) = property_node.kind() else {
+        return false;
+    };
+    if property.kind != PropertyKind::Init
+        || !matches!(
+            &property.key,
+            PropertyKey::StaticIdentifier(_)
+                | PropertyKey::StringLiteral(_)
+                | PropertyKey::TemplateLiteral(_)
+        )
+        || !property.key.is_specific_static_name("set")
+    {
+        return false;
+    }
+    let descriptor = ctx.nodes().parent_node(property_node.id());
+    let Some(parent) = outermost_paren_parent(descriptor, ctx) else {
+        return false;
+    };
+    let (call_node, argument, methods) = if matches!(parent.kind(), AstKind::ObjectProperty(_)) {
+        let descriptors = ctx.nodes().parent_node(parent.id());
+        let Some(call) = outermost_paren_parent(descriptors, ctx) else {
+            return false;
+        };
+        (call, descriptors, &["defineProperties", "create"][..])
+    } else {
+        (parent, descriptor, &["defineProperty"][..])
+    };
+    let AstKind::CallExpression(call) = call_node.kind() else {
+        return false;
+    };
+    let argument_count = if methods.len() == 1 { 3 } else { 2 };
+    if !is_method_call(call, None, Some(methods), Some(argument_count), None)
+        || call.arguments.get(argument_count - 1).is_none_or(|argument_expr| {
+            argument_expr
+                .as_expression()
+                .is_none_or(|expr| expr.without_parentheses().span() != argument.span())
+        })
+    {
+        return false;
+    }
+    let Some(member) = call.callee.get_member_expr() else {
+        return false;
+    };
+    let Expression::Identifier(object) = member.object().without_parentheses() else {
+        return false;
+    };
+    (object.name == "Object" || (methods.len() == 1 && object.name == "Reflect"))
+        && ctx.is_reference_to_global_variable(object)
 }
 
 #[test]
@@ -79,6 +153,7 @@ fn test() {
         "var set = function set(val) { return 1; };",
         "var set = val => { return 1; };",
         "var set = val => 1;",
+        "Object.defineProperty(foo, 'bar', { get set() { return val => val; } })",
         "({ set a(val) { }}); function foo() { return 1; }",
         "({ set a(val) { }}); (function () { return 1; });",
         "({ set a(val) { }}); (() => { return 1; });",
@@ -171,9 +246,6 @@ fn test() {
         "reflect.defineProperty(foo, 'bar', { set(val) { if (val) { return 1; } } })",
         "Reflect.defineProperties(foo, { bar: { set(val) { try { return 1; } catch(e){} } } })",
         "object.create(foo, { bar: { set: function(val) { return 1; } } })",
-        "Reflect.defineProperty(foo, 'bar', { set(val) { if (val) { return 1; } } })",
-        "/* globals Object:off */ Object.defineProperty(foo, 'bar', { set(val) { return 1; } })",
-        "Object.defineProperties(foo, { bar: { set(val) { try { return 1; } catch(e){} } } })",
         "let Object; Object.defineProperty(foo, 'bar', { set(val) { return 1; } })",
         "function f() { Reflect.defineProperty(foo, 'bar', { set(val) { if (val) { return 1; } } }); var Reflect;}",
         "function f(Object) { Object.defineProperties(foo, { bar: { set(val) { try { return 1; } catch(e){} } } }) }",
@@ -216,31 +288,60 @@ fn test() {
         "x = function f(){}; class A { set a(val) { return 1; } };",
         "x = () => {}; A = class { set a(val) { return 1; } };",
         "return; ({ set a(val) { return 1; } }); return 2;",
-        // "Object.defineProperty(foo, 'bar', { set(val) { return 1; } })",
-        // "Reflect.defineProperty(foo, 'bar', { set(val) { return 1; } })",
-        // "Object.defineProperties(foo, { baz: { set(val) { return 1; } } })",
-        // "Object.create(null, { baz: { set(val) { return 1; } } })",
-        // "Object.defineProperty(foo, 'bar', { set: val => val })",
-        // "Reflect.defineProperty(foo, 'bar', { set: val => f(val) })",
-        // "Object.defineProperties(foo, { baz: { set: val => a + b } })",
-        // "Object.create({}, { baz: { set: val => this._val } })",
-        // "Object.defineProperty(foo, 'bar', { set(val) { if (val) { return; } return false; }, get(val) { return 1; } })",
-        // "Reflect.defineProperty(foo, 'bar', { set(val) { try { return f(val) } catch (e) { return e }; } })",
-        // "Object.defineProperties(foo, { bar: { get(){ return null; }, set(val) { return null; } } })",
-        // "Object.create(null, { baz: { set(val) { return this._val; return; return undefined; } } })",
-        // "Object.defineProperties(foo, { baz: { set(val) { return 1; } }, bar: { set(val) { return 1; } } })",
-        // "Object.create({}, { baz: { set(val) { return 1; } }, bar: { set: (val) => 1 } })",
-        // "Object['defineProperty'](foo, 'bar', { set: function bar(val) { return 1; } })",
-        // "Reflect.defineProperty(foo, 'bar', { 'set'(val) { return 1; } })",
-        // "Object[`defineProperties`](foo, { baz: { ['set'](val) { return 1; } } })",
-        // "Object.create({}, { baz: { [`set`]: (val) => { return 1; } } })",
-        // "Object.defineProperty(foo, 'bar', { set: function Object(val) { return 1; } })",
-        // "Object.defineProperty(foo, 'bar', { set: function(Object) { return 1; } })",
-        // "Object?.defineProperty(foo, 'bar', { set(val) { return 1; } })",
-        // "(Object?.defineProperty)(foo, 'bar', { set(val) { return 1; } })",
+        "Object.defineProperty(foo, 'bar', { set(val) { return 1; } })",
+        "Reflect.defineProperty(foo, 'bar', { set(val) { return 1; } })",
+        "Object.defineProperties(foo, { baz: { set(val) { return 1; } } })",
+        "Object.create(null, { baz: { set(val) { return 1; } } })",
+        "Object.defineProperty(foo, 'bar', { set: val => val })",
+        "Reflect.defineProperty(foo, 'bar', { set: val => f(val) })",
+        "Object.defineProperties(foo, { baz: { set: val => a + b } })",
+        "Object.create({}, { baz: { set: val => this._val } })",
+        "Object.defineProperty(foo, 'bar', { set(val) { if (val) { return; } return false; }, get(val) { return 1; } })",
+        "Reflect.defineProperty(foo, 'bar', { set(val) { try { return f(val) } catch (e) { return e }; } })",
+        "Object.defineProperties(foo, { bar: { get(){ return null; }, set(val) { return null; } } })",
+        "Object.create(null, { baz: { set(val) { return this._val; return; return undefined; } } })",
+        "Object.defineProperties(foo, { baz: { set(val) { return 1; } }, bar: { set(val) { return 1; } } })",
+        "Object.create({}, { baz: { set(val) { return 1; } }, bar: { set: (val) => 1 } })",
+        "Object['defineProperty'](foo, 'bar', { set: function bar(val) { return 1; } })",
+        "Reflect.defineProperty(foo, 'bar', { 'set'(val) { return 1; } })",
+        "Object[`defineProperties`](foo, { baz: { ['set'](val) { return 1; } } })",
+        "Object.create({}, { baz: { [`set`]: (val) => { return 1; } } })",
+        "Object.defineProperty(foo, 'bar', { set: function Object(val) { return 1; } })",
+        "Object.defineProperty(foo, 'bar', { set: function(Object) { return 1; } })",
+        "Object?.defineProperty(foo, 'bar', { set(val) { return 1; } })",
+        "(Object?.defineProperty)(foo, 'bar', { set(val) { return 1; } })",
+        "Object.defineProperty(foo, 'bar', { set: value => value }, ignored)",
+        "Reflect.defineProperty(foo, 'bar', { set(value) { return value; } }, ignored)",
+        "Object.defineProperties(foo, { bar: { set: value => value } }, ignored)",
+        "Object.create(foo, { bar: { set: value => value } }, ignored)",
     ];
 
     Tester::new(NoSetterReturn::NAME, NoSetterReturn::PLUGIN, pass, fail)
+        .change_rule_path_extension("js")
+        .test_and_snapshot();
+}
+
+#[test]
+fn test_disabled_globals() {
+    use crate::tester::Tester;
+
+    let pass = vec![
+        (
+            "Object.defineProperty(foo, 'bar', { set(value) { return value; } })",
+            None,
+            Some(serde_json::json!({ "globals": { "Object": "off" } })),
+        ),
+        (
+            "Reflect.defineProperty(foo, 'bar', { set: value => value })",
+            None,
+            Some(serde_json::json!({ "globals": { "Reflect": "off" } })),
+        ),
+    ];
+    let fail =
+        vec![("Object.defineProperty(foo, 'bar', { set(value) { return value; } })", None, None)];
+
+    Tester::new(NoSetterReturn::NAME, NoSetterReturn::PLUGIN, pass, fail)
+        .with_snapshot_suffix("disabled-globals")
         .change_rule_path_extension("js")
         .test_and_snapshot();
 }

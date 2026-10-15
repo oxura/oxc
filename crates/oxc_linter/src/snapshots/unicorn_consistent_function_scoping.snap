@@ -2,6 +2,15 @@
 source: crates/oxc_linter/src/tester.rs
 ---
 
+  ⚠ unicorn(consistent-function-scoping): Function `builder` does not capture any variables from its parent scope
+   ╭─[consistent_function_scoping.tsx:1:28]
+ 1 │ function make() { function builder(...args) { return builder.apply(null, args); } return builder; }
+   ·          ──┬─              ───┬───
+   ·            │                  ╰── This function does not use any variables from the parent function
+   ·            ╰── Outer scope where this function is defined
+   ╰────
+  help: Move `builder` to the outer scope to avoid recreating it on every call.
+
   ⚠ unicorn(consistent-function-scoping): Function `doBar` does not capture any variables from its parent scope
    ╭─[consistent_function_scoping.tsx:3:30]
  2 │                 {

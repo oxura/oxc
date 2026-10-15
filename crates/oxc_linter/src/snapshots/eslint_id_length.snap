@@ -3,6 +3,66 @@ source: crates/oxc_linter/src/tester.rs
 ---
 
   ⚠ eslint(id-length): Identifier name is too short (< 2).
+   ╭─[id_length.tsx:1:9]
+ 1 │ let ix, s; for ([ix, s] of [[1, 'a']]) { console.log(ix, s); }
+   ·         ─
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too short (< 2).
+   ╭─[id_length.tsx:1:22]
+ 1 │ let ix, s; for ([ix, s] of [[1, 'a']]) { console.log(ix, s); }
+   ·                      ─
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too short (< 2).
+   ╭─[id_length.tsx:1:5]
+ 1 │ let q; [q] = [2]; console.log(q);
+   ·     ─
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too short (< 2).
+   ╭─[id_length.tsx:1:9]
+ 1 │ let q; [q] = [2]; console.log(q);
+   ·         ─
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too short (< 2).
+   ╭─[id_length.tsx:1:2]
+ 1 │ [q = fallback] = values;
+   ·  ─
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too short (< 2).
+   ╭─[id_length.tsx:1:5]
+ 1 │ [...q] = values;
+   ·     ─
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too short (< 2).
+   ╭─[id_length.tsx:1:11]
+ 1 │ ({ value: q } = values);
+   ·           ─
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too short (< 2).
+   ╭─[id_length.tsx:1:4]
+ 1 │ ({ q } = values);
+   ·    ─
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too short (< 2).
+   ╭─[id_length.tsx:1:15]
+ 1 │ for ({ value: q } of values) {}
+   ·               ─
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too long (> 5).
+   ╭─[id_length.tsx:1:2]
+ 1 │ [longName] = values;
+   ·  ────────
+   ╰────
+
+  ⚠ eslint(id-length): Identifier name is too short (< 2).
    ╭─[id_length.tsx:1:5]
  1 │ var x = 1;
    ·     ─

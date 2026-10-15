@@ -258,7 +258,11 @@ struct InternConfig<'a> {
 
 impl InternConfig<'_> {
     pub fn from<'a>(node: &'a AstNode<'a>, parent_node: &'a AstNode<'a>) -> InternConfig<'a> {
-        let is_unary = matches!(parent_node.kind(), AstKind::UnaryExpression(_));
+        let is_unary = matches!(
+            parent_node.kind(),
+            AstKind::UnaryExpression(unary)
+                if matches!(unary.operator, UnaryOperator::UnaryNegation | UnaryOperator::UnaryPlus)
+        );
         let is_negative = matches!(parent_node.kind(), AstKind::UnaryExpression(unary) if unary.operator == UnaryOperator::UnaryNegation);
 
         match node.kind() {
@@ -557,6 +561,7 @@ fn test() {
     let ignore_typed_index_arrays = Some(serde_json::json!([{ "ignoreTypeIndexes": true }]));
 
     let pass = vec![
+        ("exports.value = -7; exports.other = +7;", None),
         ("var x = parseInt(y, 10);", None),
         ("var x = parseInt(y, -10);", None),
         ("var x = Number.parseInt(y, 10);", None),
@@ -737,6 +742,11 @@ fn test() {
     ];
 
     let fail = vec![
+        ("exports.value = void 0;", None),
+        ("exports.value = ~5;", None),
+        ("exports.value = !5;", None),
+        ("exports.value = typeof 5;", None),
+        ("exports.value = ~5n;", None),
         ("var foo = 42", enforce_const.clone()), // { "ecmaVersion": 6 },
         ("var foo = 0 + 1;", None),
         ("var foo = 42n", enforce_const), // { "ecmaVersion": 2020 },

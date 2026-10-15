@@ -332,7 +332,8 @@ impl ConsistentFunctionScoping {
             }
             let scope_id = ctx.scoping().symbol_scope_id(symbol_id);
             if ctx.scoping().scope_is_descendant_of(function_scope_id, scope_id)
-                && symbol_id != function_declaration_symbol_id
+                && !(symbol_id == function_declaration_symbol_id
+                    && matches!(node.kind(), AstKind::Function(function) if function.is_function_declaration()))
             {
                 // Both class declarations and expressions have an internal self binding.
                 // Moving past the class body would lose that binding.
@@ -667,6 +668,18 @@ fn test() {
     use crate::tester::Tester;
 
     let pass = vec![
+        (
+            "const make = self => { const builder = (...args) => builder.apply(null, args); builder.self = self; return builder; };",
+            None,
+        ),
+        (
+            "function make(self) { const builder = function (...args) { return builder.apply(null, args); }; builder.self = self; return builder; }",
+            None,
+        ),
+        (
+            "function make() { const builder = function named(...args) { return builder.apply(null, args); }; return builder; }",
+            None,
+        ),
         ("function doFoo(foo) { return foo; }", None),
         ("function doFoo(foo) { return bar; }", None),
         ("const doFoo = function() {};", None),
@@ -1168,6 +1181,10 @@ fn test() {
     ];
 
     let fail = vec![
+        (
+            "function make() { function builder(...args) { return builder.apply(null, args); } return builder; }",
+            None,
+        ),
         // start of cases that eslint-plugin-unicorn passes, but we fail.
 
         // declared function is inside a block statement

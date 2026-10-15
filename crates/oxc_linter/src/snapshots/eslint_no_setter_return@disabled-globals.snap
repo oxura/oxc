@@ -1,0 +1,10 @@
+---
+source: crates/oxc_linter/src/tester.rs
+---
+
+  ⚠ eslint(no-setter-return): Setter cannot return a value
+   ╭─[no_setter_return.js:1:50]
+ 1 │ Object.defineProperty(foo, 'bar', { set(value) { return value; } })
+   ·                                                  ─────────────
+   ╰────
+  help: Remove the return statement or ensure it does not return a value.
