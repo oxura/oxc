@@ -284,6 +284,9 @@ impl<'a> LintContext<'a> {
     /// Report a lint rule violation.
     ///
     /// Use [`LintContext::diagnostic_with_fix`] to provide an automatic fix.
+    ///
+    /// Diagnostics without a source span are file-level diagnostics. Regular
+    /// disable directives can suppress them, but line-specific directives cannot.
     #[cold]
     #[inline(never)]
     pub fn diagnostic(&self, diagnostic: OxcDiagnostic) {

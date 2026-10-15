@@ -313,8 +313,12 @@ impl DisableDirectives {
         // we check if any part of the diagnostic span overlaps with the disabled interval.
         // This ensures that diagnostics starting before the disable comment (like no-empty-file)
         // are still suppressed.
+        // An unspanned diagnostic applies to the whole file. Only regular disable
+        // directives can suppress it; there is no diagnostic line to match.
+        let file_level = span.is_unspanned();
+        let query = if file_level { Span::new(0, u32::MAX) } else { span };
         let mut has_match = false;
-        for interval in self.intervals.find(span.start, span.end) {
+        for interval in self.intervals.find(query.start, query.end) {
             // Check if this rule should be disabled
             let rule_matches = match &interval.val {
                 DisabledRule::All { .. } => true,
@@ -343,7 +347,9 @@ impl DisableDirectives {
             }
 
             // Check if the diagnostic span is covered by this interval
-            let span_covered = if interval.val.is_next_line() {
+            let span_covered = if file_level {
+                !interval.val.is_next_line()
+            } else if interval.val.is_next_line() {
                 // For next-line directives, only check if the diagnostic starts within the interval
                 // We intentionally only check span.start (not span.end) to avoid suppressing
                 // diagnostics for large constructs that merely contain the disabled line
@@ -2083,6 +2089,28 @@ function test() {
         // fix_span must delete the whole line (including the 4-space indentation).
         let result = apply_delete(source_text, unused[0].fix_span);
         assert_eq!(result, "function f() {\n    console.log();\n}\n");
+    }
+
+    #[test]
+    fn file_level_diagnostic_marks_only_regular_disable_used() {
+        for (source, suppressed) in [
+            ("/* oxlint-disable import/unambiguous */\nfunction f() {}", true),
+            ("/* eslint-disable */\nfunction f() {}", true),
+            ("// oxlint-disable-next-line import/unambiguous\nfunction f() {}", false),
+            ("function f() {} // oxlint-disable-line import/unambiguous", false),
+            ("/* oxlint-disable no-debugger */\nfunction f() {}", false),
+        ] {
+            let allocator = Allocator::default();
+            let semantic = process_source(&allocator, source);
+            let directives =
+                DisableDirectivesBuilder::new().build(semantic.source_text(), semantic.comments());
+            assert_eq!(directives.contains("unambiguous", Span::default()), suppressed, "{source}");
+            assert_eq!(
+                directives.collect_unused_disable_comments().is_empty(),
+                suppressed,
+                "{source}"
+            );
+        }
     }
 
     #[test]

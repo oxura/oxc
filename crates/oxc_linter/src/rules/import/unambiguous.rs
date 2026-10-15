@@ -63,6 +63,9 @@ fn test() {
     use crate::tester::Tester;
 
     let pass = vec![
+        "/* oxlint-disable import/unambiguous */\nfunction x() {}",
+        "/* eslint-disable import/unambiguous */\nfunction x() {}",
+        "/* oxlint-disable */\nfunction x() {}",
         // looks like in original rule that should pass for ecmaVersion before 2015
         // r"function x() {}",
         // r#""use strict"; function y() {}"#,
@@ -77,7 +80,13 @@ fn test() {
         "export function x() {}",
     ];
 
-    let fail = vec![r"function x() {}", r"(function x() { return 42 })()"];
+    let fail = vec![
+        r"function x() {}",
+        r"(function x() { return 42 })()",
+        "/* oxlint-disable unicorn/no-empty-file */\nfunction x() {}",
+        "// oxlint-disable-next-line import/unambiguous\nfunction x() {}",
+        "function x() {} // oxlint-disable-line import/unambiguous",
+    ];
 
     Tester::new(Unambiguous::NAME, Unambiguous::PLUGIN, pass, fail)
         .change_rule_path("index.ts")
