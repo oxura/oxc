@@ -15643,10 +15643,10 @@
           "markdownDescription": "Controls how hoisting is handled."
         },
         "ignoreFunctionTypeParameterNameValueShadow": {
-          "description": "If `true`, ignore when a function type parameter shadows a value.\nExample: `const T = 1; function foo<T>() {}`",
+          "description": "If `true`, ignore when a parameter name in a function type shadows a value.\nExample: `const x = 1; type F = (x: string) => void;`\nType parameters that shadow outer types are still checked.",
           "default": true,
           "type": "boolean",
-          "markdownDescription": "If `true`, ignore when a function type parameter shadows a value.\nExample: `const T = 1; function foo<T>() {}`"
+          "markdownDescription": "If `true`, ignore when a parameter name in a function type shadows a value.\nExample: `const x = 1; type F = (x: string) => void;`\nType parameters that shadow outer types are still checked."
         },
         "ignoreOnInitialization": {
           "description": "Whether to ignore the variable initializers when the shadowed variable is presumably still uninitialized.",

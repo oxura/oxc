@@ -4090,8 +4090,9 @@ export interface NoShadowConfig {
    */
   hoist?: HoistOption;
   /**
-   * If `true`, ignore when a function type parameter shadows a value.
-   * Example: `const T = 1; function foo<T>() {}`
+   * If `true`, ignore when a parameter name in a function type shadows a value.
+   * Example: `const x = 1; type F = (x: string) => void;`
+   * Type parameters that shadow outer types are still checked.
    */
   ignoreFunctionTypeParameterNameValueShadow?: boolean;
   /**

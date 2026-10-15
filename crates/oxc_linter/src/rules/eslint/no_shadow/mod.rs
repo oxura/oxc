@@ -243,6 +243,8 @@ impl NoShadow {
         }
 
         if self.ignore_function_type_parameter_name_value_shadow
+            && !shadowed_flags.is_type_import()
+            && shadowed_flags.can_be_referenced_by_value()
             && Self::is_function_type_parameter_name_value_shadow(ctx, symbol_id)
         {
             return true;

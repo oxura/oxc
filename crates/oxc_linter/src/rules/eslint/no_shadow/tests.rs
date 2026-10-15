@@ -3715,3 +3715,33 @@ fn test_typescript_eslint() {
         .with_snapshot_suffix("typescript-eslint")
         .test_and_snapshot();
 }
+
+#[test]
+fn test_function_type_parameter_shadow() {
+    use crate::tester::Tester;
+
+    let pass = vec![
+        ("const x = 1; type F = (x: string) => void;", None),
+        ("const T = 1; type F = <T>(x: T) => void;", None),
+        ("const x = 1; declare function f(x: string): void;", None),
+        ("const x = 1; interface I { m(x: string): void; }", None),
+        ("type T = 1; type F = <U>(x: U) => T;", None),
+    ];
+    let fail = vec![
+        ("type T = 1; declare function f<T>(x: T): void;", None),
+        ("type T = 1; type F = <T>(x: T) => void;", None),
+        ("type T = 1; interface I { m<T>(x: T): void; }", None),
+        ("type T = 1; interface I { <T>(x: T): void; }", None),
+        ("type T = 1; interface I { new<T>(x: T): object; }", None),
+        ("type T = 1; type F = new<T>(x: T) => object;", None),
+        ("import type { T } from 'types'; type F = <T>(x: T) => void;", None),
+        (
+            "const x = 1; type F = (x: string) => void;",
+            Some(serde_json::json!([{ "ignoreFunctionTypeParameterNameValueShadow": false }])),
+        ),
+    ];
+
+    Tester::new(NoShadow::NAME, NoShadow::PLUGIN, pass, fail)
+        .with_snapshot_suffix("function-type-parameter")
+        .test_and_snapshot();
+}

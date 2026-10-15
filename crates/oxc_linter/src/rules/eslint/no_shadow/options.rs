@@ -35,8 +35,9 @@ pub struct NoShadowConfig {
     #[serde(default = "default_true")]
     pub ignore_type_value_shadow: bool,
 
-    /// If `true`, ignore when a function type parameter shadows a value.
-    /// Example: `const T = 1; function foo<T>() {}`
+    /// If `true`, ignore when a parameter name in a function type shadows a value.
+    /// Example: `const x = 1; type F = (x: string) => void;`
+    /// Type parameters that shadow outer types are still checked.
     #[serde(default = "default_true")]
     pub ignore_function_type_parameter_name_value_shadow: bool,
 
