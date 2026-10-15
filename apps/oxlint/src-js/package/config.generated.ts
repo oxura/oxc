@@ -2568,7 +2568,7 @@ export interface NoCycle {
    */
   allowUnsafeDynamicCyclicDependency?: boolean;
   /**
-   * Ignore external modules
+   * Skip dependencies resolved inside `node_modules`. Defaults to `false`.
    */
   ignoreExternal?: boolean;
   /**

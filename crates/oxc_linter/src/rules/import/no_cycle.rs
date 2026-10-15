@@ -71,7 +71,7 @@ pub struct NoCycle {
     max_depth: u32,
     /// Ignore type-only imports
     ignore_types: bool,
-    /// Ignore external modules
+    /// Skip dependencies resolved inside `node_modules`. Defaults to `false`.
     ignore_external: bool,
     /// Allow cyclic dependency if there is at least one dynamic import in the chain
     allow_unsafe_dynamic_cyclic_dependency: bool,
@@ -265,11 +265,11 @@ impl NoCycle {
     ) -> bool {
         let path = &module.resolved_absolute_path;
 
-        let is_node_module = path
-            .components()
-            .any(|c| matches!(c, Component::Normal(p) if p == OsStr::new("node_modules")));
-
-        if is_node_module {
+        if self.ignore_external
+            && path
+                .components()
+                .any(|c| matches!(c, Component::Normal(p) if p == OsStr::new("node_modules")))
+        {
             return false;
         }
 
@@ -518,6 +518,31 @@ fn test() {
     Tester::new(NoCycle::NAME, NoCycle::PLUGIN, pass, fail)
         .change_rule_path("cycles/depth-zero.js")
         .with_import_plugin(true)
+        .test_and_snapshot();
+}
+
+#[test]
+fn test_ignore_external() {
+    use serde_json::json;
+
+    use crate::tester::Tester;
+
+    let pass = vec![
+        ("import 'external';", Some(json!([{ "ignoreExternal": true }]))),
+        ("import './bridge.js';", Some(json!([{ "ignoreExternal": true }]))),
+        ("import './node_modules/external/index.js';", Some(json!([{ "ignoreExternal": true }]))),
+    ];
+    let fail = vec![
+        ("import 'external';", None),
+        ("import 'external';", Some(json!([{ "ignoreExternal": false }]))),
+        ("import './bridge.js';", None),
+        ("import './local.js';", Some(json!([{ "ignoreExternal": true }]))),
+    ];
+
+    Tester::new(NoCycle::NAME, NoCycle::PLUGIN, pass, fail)
+        .change_rule_path("cycles/issue_17616/index.js")
+        .with_import_plugin(true)
+        .with_snapshot_suffix("ignore-external")
         .test_and_snapshot();
 }
 

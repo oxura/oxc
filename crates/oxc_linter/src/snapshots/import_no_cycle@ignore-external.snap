@@ -1,0 +1,53 @@
+---
+source: crates/oxc_linter/src/tester.rs
+---
+
+  ⚠ import(no-cycle): Dependency cycle detected
+   ╭─[cycles/issue_17616/index.js:1:8]
+ 1 │ import 'external';
+   ·        ──────────
+   ╰────
+  help: Refactor to remove the cycle. Consider extracting shared code into a separate module that both files can import.
+  note: These paths form a cycle:
+           ╭──▶ external (fixtures/import/cycles/issue_17616/node_modules/external/index.js)
+           │         ⬇ imports
+           │    ../../index.js (fixtures/import/cycles/issue_17616/index.js)
+           ╰─────────╯ imports the current file
+
+  ⚠ import(no-cycle): Dependency cycle detected
+   ╭─[cycles/issue_17616/index.js:1:8]
+ 1 │ import 'external';
+   ·        ──────────
+   ╰────
+  help: Refactor to remove the cycle. Consider extracting shared code into a separate module that both files can import.
+  note: These paths form a cycle:
+           ╭──▶ external (fixtures/import/cycles/issue_17616/node_modules/external/index.js)
+           │         ⬇ imports
+           │    ../../index.js (fixtures/import/cycles/issue_17616/index.js)
+           ╰─────────╯ imports the current file
+
+  ⚠ import(no-cycle): Dependency cycle detected
+   ╭─[cycles/issue_17616/index.js:1:8]
+ 1 │ import './bridge.js';
+   ·        ─────────────
+   ╰────
+  help: Refactor to remove the cycle. Consider extracting shared code into a separate module that both files can import.
+  note: These paths form a cycle:
+           ╭──▶ ./bridge.js (fixtures/import/cycles/issue_17616/bridge.js)
+           │         ⬇ imports
+           │    external (fixtures/import/cycles/issue_17616/node_modules/external/index.js)
+           │         ⬇ imports
+           │    ../../index.js (fixtures/import/cycles/issue_17616/index.js)
+           ╰─────────╯ imports the current file
+
+  ⚠ import(no-cycle): Dependency cycle detected
+   ╭─[cycles/issue_17616/index.js:1:8]
+ 1 │ import './local.js';
+   ·        ────────────
+   ╰────
+  help: Refactor to remove the cycle. Consider extracting shared code into a separate module that both files can import.
+  note: These paths form a cycle:
+           ╭──▶ ./local.js (fixtures/import/cycles/issue_17616/local.js)
+           │         ⬇ imports
+           │    ./index.js (fixtures/import/cycles/issue_17616/index.js)
+           ╰─────────╯ imports the current file

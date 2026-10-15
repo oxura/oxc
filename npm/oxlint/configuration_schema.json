@@ -14013,10 +14013,10 @@
           "markdownDescription": "Allow cyclic dependency if there is at least one dynamic import in the chain"
         },
         "ignoreExternal": {
-          "description": "Ignore external modules",
+          "description": "Skip dependencies resolved inside `node_modules`. Defaults to `false`.",
           "default": false,
           "type": "boolean",
-          "markdownDescription": "Ignore external modules"
+          "markdownDescription": "Skip dependencies resolved inside `node_modules`. Defaults to `false`."
         },
         "ignoreTypes": {
           "description": "Ignore type-only imports",
